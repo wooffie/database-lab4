@@ -1,0 +1,33 @@
+plugins {
+    id 'org.jetbrains.kotlin.jvm' version '1.5.10'
+    id 'java'
+}
+
+group 'org.example'
+version '1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.6.20'
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.8.2'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.8.2'
+    implementation 'com.github.javafaker:javafaker:1.0.2'
+    implementation "org.jetbrains.exposed:exposed-core:0.37.3"
+    implementation "org.jetbrains.exposed:exposed-jdbc:0.37.3"
+    implementation "org.jetbrains.exposed:exposed-java-time:0.37.3"
+    implementation 'org.apache.commons:commons-csv:1.9.0'
+    implementation 'org.slf4j:slf4j-simple:1.7.36'
+    implementation 'com.zaxxer:HikariCP:5.0.1'
+    implementation 'org.postgresql:postgresql:42.3.3'
+
+    implementation 'org.jfree:jfreechart:1.5.0'
+    implementation 'org.apache.commons:commons-math3:3.0'
+}
+
+test {
+    useJUnitPlatform()
+}
