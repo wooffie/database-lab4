@@ -8,7 +8,7 @@ import java.io.ObjectOutputStream
 
 fun main() {
 
-    CachingDataBaseConnector.cachingEnabled = false
+    CachingDataBaseConnector.cachingEnabled = true
 
      val iterations = 1000
 
