@@ -49,11 +49,11 @@ open class LRU<Key, Value>(private val size: Int) {
     }
 
     // For debug
-    fun iterator() : MutableIterator<MutableMap.MutableEntry<Key, Value>> {
+    fun iterator(): MutableIterator<MutableMap.MutableEntry<Key, Value>> {
         return hashMap.iterator()
     }
 
-    fun getInfo() : String{
+    fun getInfo(): String {
         return hashMap.toString()
     }
 
@@ -62,7 +62,7 @@ open class LRU<Key, Value>(private val size: Int) {
 object Cache : LRU<Int, Int>(100)
 
 
-fun main(){
+fun main() {
     val cyclicBarrier = CyclicBarrier(2)
     val a = AtomicInteger(0)
 
@@ -71,7 +71,7 @@ fun main(){
         var i = 0
         var j = 0
 
-        for (x in 0..5){
+        for (x in 0..5) {
             i = nextInt(5)
             j = nextInt(100)
             Cache[i] = j
@@ -89,7 +89,7 @@ fun main(){
         cyclicBarrier.await()
         var i = 0
         var j = 0
-        for (x in 0..5){
+        for (x in 0..5) {
             i = nextInt(4)
             j = nextInt(100)
             Cache[i] = j

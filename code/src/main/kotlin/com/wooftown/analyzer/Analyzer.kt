@@ -5,26 +5,26 @@ import java.io.FileInputStream
 import java.io.ObjectInputStream
 
 
-fun main(){
+fun main() {
 
-    for (i in listOf("/cache","/default")){
+    for (i in listOf("/cache", "/default")) {
         val filedir = File("results" + i)
         val dataFiles = filedir.listFiles()
 
         val experimentDataList = mutableListOf<ExperimentData>()
 
-        for (file in dataFiles){
+        for (file in dataFiles) {
             try {
                 val fis = FileInputStream(file)
                 val ois = ObjectInputStream(fis)
                 val time = ois.readObject() as List<Long>
-                experimentDataList.add(ExperimentData(time,file.name))
-            } catch (e : Exception){
+                experimentDataList.add(ExperimentData(time, file.name))
+            } catch (e: Exception) {
                 e.printStackTrace()
             }
 
         }
-        makeTable(experimentDataList,i)
+        makeTable(experimentDataList, i)
 
     }
 

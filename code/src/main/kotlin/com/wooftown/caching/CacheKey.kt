@@ -3,7 +3,7 @@ package com.wooftown.caching
 
 abstract class CacheKey
 
-class OrderKey(val orderId : Int) : CacheKey() {
+class OrderKey(val orderId: Int) : CacheKey() {
 
     override fun hashCode(): Int {
         return orderId.hashCode()
@@ -21,7 +21,7 @@ class OrderKey(val orderId : Int) : CacheKey() {
     }
 }
 
-object MenuKey : CacheKey(){
+object MenuKey : CacheKey() {
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true

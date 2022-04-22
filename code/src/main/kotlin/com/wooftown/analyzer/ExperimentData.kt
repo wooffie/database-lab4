@@ -3,11 +3,11 @@ package com.wooftown.analyzer
 import org.apache.commons.math3.distribution.TDistribution
 import org.apache.commons.math3.stat.descriptive.DescriptiveStatistics
 
-class ExperimentData(private val data: List<Long>, val name : String) {
+class ExperimentData(private val data: List<Long>, val name: String) {
 
-    fun getDataInMillis() : List<Double> = data.map { it / 1_000_000.0 }
+    fun getDataInMillis(): List<Double> = data.map { it / 1_000_000.0 }
 
-    val statistics = DescriptiveStatistics();
+    private val statistics = DescriptiveStatistics();
 
     val mean: Double
     val SD: Double

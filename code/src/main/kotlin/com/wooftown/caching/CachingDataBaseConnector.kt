@@ -16,9 +16,7 @@ object CachingDataBaseConnector : DatabaseConnector() {
                 return Cache[key]!!
             } else {
                 val result = UsualDatabaseConnector.checkMenu()
-                if (result != null) {
-                    Cache[key] = result
-                }
+                Cache[key] = result
                 return result
             }
         } else {
@@ -33,9 +31,7 @@ object CachingDataBaseConnector : DatabaseConnector() {
                 return Cache[key]
             } else {
                 val result = UsualDatabaseConnector.checkOrderPositions(orderId)
-                if (result != null) {
-                    Cache[key] = result
-                }
+                Cache[key] = result
                 return result
             }
         } else {
@@ -50,9 +46,7 @@ object CachingDataBaseConnector : DatabaseConnector() {
                 return Cache[key]
             } else {
                 val result = UsualDatabaseConnector.checkOrder(orderId)
-                if (result != null) {
-                    Cache[key] = result
-                }
+                Cache[key] = result
                 return result
             }
         }

@@ -10,7 +10,7 @@ fun main() {
 
     CachingDataBaseConnector.cachingEnabled = true
 
-     val iterations = 1000
+    val iterations = 1000
 
     val threadsMap = mutableMapOf(
         "Check_Menu" to ViewMenuThread(iterations),
