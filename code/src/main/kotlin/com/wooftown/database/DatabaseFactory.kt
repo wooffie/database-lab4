@@ -17,7 +17,7 @@ object DatabaseFactory {
         config.driverClassName = "org.postgresql.Driver"
         config.jdbcUrl = "jdbc:postgresql://127.0.0.1:5432/lab4"
         config.username = "postgres"
-        config.password = "stfu"
+        config.password = ""
         config.maximumPoolSize = 10
         config.isAutoCommit = false
         // !!!!!!!!!

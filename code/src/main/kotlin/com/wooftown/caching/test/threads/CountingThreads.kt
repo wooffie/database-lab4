@@ -99,9 +99,6 @@ class AddPizzaThread(iterations: Int) : CountingThread(iterations) {
             time.add(System.nanoTime() - start)
 
         }
-
-
-
         println("4 ended")
         CYCLICBARRIER.await()
     }

@@ -1,13 +1,2 @@
 post,cook,cashbox,delivery
 Universal Soldier,True,True,True
-Junior Pizza Maker,True,False,False
-Middle Pizza Maker,True,False,False
-Senior Pizza Maker,True,False,False
-Trainer,True,True,False
-Manager,True,True,False
-Junior Cashier,False,True,False
-Middle Cashier,False,True,False
-Senior Cashier,False,True,False
-Junior Deliveryman,False,False,True
-Middle Deliveryman,False,False,True
-Senior Deliveryman,False,False,True

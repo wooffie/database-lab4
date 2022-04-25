@@ -7,18 +7,31 @@
 
 ## Программа работы
 
-1. Выбор понравившегося способа кэширования:
-    - **в памяти программы**
+Общее описание:
+
+1. для данной работы необходимо выбрать часть таблиц БД (3+), для которой можно придумать/использовать осмысленные SQL-запросы, необходимые для выполнения пользовательских функций
+в рамках работы необходимо реализовать две программы: кэширующий прокси и программа для выполнения запросов и измерения результатов
+
+
+2. Выбор понравившегося способа кэширования:
+    - в памяти программы
     - с использованием внешних хранилищ
     - во внешней памяти
-2. Реализация выбранного способа
+
+
+3. Реализация выбранного способа
     - преобразование входных запросов
     - выбор ключа для хранения результатов
     - реализация алгоритма поиска сохраненных результатов, которые надо сбросить после внесения изменений в БД
-3. Снятие показательных характеристик
-    - реализация дополнительной программы для формирования потока запросов к БД на чтение/изменение/удаление с возможностью настройки соотношения запросов, количества запросов разных типов в потоке и измерения временных характеристик: среднее/минимальное/максимальное время выполнения запроса по типу
-4. Анализ полученных результатов и сравнение реализаций с кэшем и без между собой.
-5. Демонстрация результатов преподавателю.
+
+
+4. Снятие показательных характеристик
+
+-   в программе для формирования потока запросов к БД на чтение/изменение/удаление должна быть возможность настройки соотношения запросов, количества запросов разных типов в потоке и измерения временных характеристик: среднее/минимальное/максимальное время выполнения запроса по типу, необходимо иметь возможность проанализировать эффективность кэширования в различных сценариев: преимущественно чтение, преимущественно изменение, преимущественно удаление
+измерения можно производить путем простого сравнения отметок текущего времени до и после выполнения запросов
+
+5. Анализ полученных результатов и сравнение реализаций с кэшем и без между собой.
+6. Демонстрация результатов преподавателю.
 
 ## Ход работы:
 
@@ -26,18 +39,22 @@
 
 Для данной работы я решил моделировать следующий тип взаимодействия с БД: оформление онлайн заказов пиццы. У посетителя есть список пицц, корзина, и статус его заказа. В основном работа будет происходить с этими таблицами.
 
-Поясню мой выбор: т.к. **описание работы написано довольно расплывчато, то я посчитал, что делать кэширование всей БД будет слишком сложной работой (учитывая когерентность можно назвать её выпуской работой), поэтому я взял частные случаи работы с БД, где можно наглядно посмотрел некоторые алгоритмы и решить проблему актуальности кэшированных данных**. 
+Что нам нужно:
+- Таблица с информацией о заказе (`order`)
+- Таблица с позициями в заказе (`pizza_in_order`)
+- Таблица с доставкой (`delivery`)
 
-Примерный список операций для пользователя (в скобках указываю какие данные могут терять актуальность):
-- просмотр меню пицц (I)
-- просмотр содержимого заказа (II)
-- просмотр заказа (III)
-- добавление пиццы (изменение II, III)
-- изменение количество пицц в одной позиции (II, III)
-- изменение способа доставки (III)
-- изменение ресторана для приготовления (II)
-- изменение адреса доставки (III)
-- удаление пиццы из заказа (II, III)
+Какие функции будут у нашего API:
+- Посмотреть меню заведений (добавил для теста)
+- Посмотреть информацию о заказе (включая доставку)
+- Посмотреть из чего состоит заказ
+- Добавить пиццу к заказу
+- Изменить количество пицц в заказе
+- Изменить тип заказа (имеется ввиду доставка/самовывоз)
+- Изменить ресторан доставки/самовывоза
+- Изменить адрес доставки
+- Удалить пиццу из заказа
+
 
 Кэширование будет происходить в памяти JVM, как алгоритм я использую самый простой LRU.
 
@@ -207,46 +224,139 @@ fun main(){
 
 ### **Связь с БД**
 
-Выше описывались основные операция при работе с БД, давайте реализуем их в виде отдельного класса.
-
-- просмотр меню пицц (I)
-- просмотр содержимого заказа (II)
-- просмотр заказа (III)
-- добавление пиццы (изменение II, III)
-- изменение количество пицц в одной позиции (II, III)
-- изменение способа доставки (III)
-- изменение ресторана для приготовления (II)
-- изменение адреса доставки (III)
-- удаление пиццы из заказа (II, III)
-
-В кэше необходимо хранить меню пицц, содержимое заказа и информацию о заказе.
-
-Как данные будем использовать `List<ResultRow>`, пусть программисты на фронтенде сами думают, что с этим сделать. А ключ будет характеризовать информацию значения.
-
-Дефолтный коннектор будет выглядеть следующим образом:
-
+Т. к. для генерации данных я использовал Kotlin Exposed и мне понравился этот фреймворк, то и работу с БД буду производить через него. Для начала надо описать ключи для кэша. В качестве ключей, будем брать объект наследованный от `CacheKey` с уникальным идентификатором. На самом деле это очень простой вариант и выглядит он следующим образом:
 ```kotlin
-object UsualDatabaseConnector : DatabaseConnector() {
+abstract class CacheKey
 
-    override fun checkMenu(): List<ResultRow>? {
+class OrderKey(val orderId: Int) : CacheKey() {
+
+    override fun hashCode(): Int {
+        return orderId.hashCode()
+    }
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as OrderKey
+
+        if (orderId != other.orderId) return false
+
+        return true
+    }
+}
+```
+Т.к. у нас есть 2 варианта работы с БД: без кэширования и с кэшированием, то создадим два объекта, которые будут наследоваться от абстрактного класса:
+```kotlin
+package com.wooftown.caching
+
+import com.wooftown.database.tables.ORDERTYPE
+import org.jetbrains.exposed.sql.ResultRow
+
+abstract class DatabaseConnector {
+
+    abstract fun checkMenu(): List<ResultRow>?
+
+    abstract fun checkOrderPositions(orderId: Int): List<ResultRow>?
+
+    abstract fun checkOrder(orderId: Int): List<ResultRow>?
+
+    abstract fun addPizza(orderId: Int, pizzaId: Int, amount: Int)
+
+    abstract fun changePizzaAmount(orderId: Int, pizzaId: Int, newAmount: Int)
+
+    abstract fun changeType(orderId: Int, newType: ORDERTYPE)
+
+    abstract fun changeRestaurant(orderId: Int, newRestaurantId: Int)
+
+    abstract fun changeDeliveryAddress(orderId: Int, newAddress: String)
+
+    abstract fun removePizza(orderId: Int, pizzaId: Int)
+
+}
+```
+Данный класс содержит все необходимые функции. Давайте посмотрим, как будут выглядеть методы работы с БД параллельно. Сверху - обычное взаимодействие с БД, снизу - кэширование.
+
+- Посмотреть меню заведений (добавил для теста)
+```kotlin
+ override fun checkMenu(): List<ResultRow> {
         return transaction {
             Pizza.selectAll().map { it }
         }
     }
 
-    override fun checkOrderPositions(orderId: Int): List<ResultRow>? {
-        return transaction {
-            PizzaInOrder.select { PizzaInOrder.orderId eq orderId }.map { it }
+override fun checkMenu(): List<ResultRow>? {
+        if (cachingEnabled) {
+            val key = MenuKey
+            if (Cache[key] != null) {
+                return Cache[key]!!
+            } else {
+                val result = UsualDatabaseConnector.checkMenu()
+                Cache[key] = result
+                return result
+            }
+        } else {
+            return UsualDatabaseConnector.checkMenu()
         }
     }
 
-    override fun checkOrder(orderId: Int): List<ResultRow>? {
+````
+На самом деле этот запрос можно назвать тестовым, потому что когда пользователи выбирают пиццу на сайте, очень редко заведение берёт и удаляет что-то (их выкинет с рестартом сервера и так далее), но я подумал что хранить такую важную штуку в кэше может быть полезным.
+
+Если мы используем кэширование, то при помощи геттера получаем значение из кэша. Если такой ключ есть, то и меню есть, так что можем брать оттуда. Иначе необходимо произвести транзакцию для получения меню прямиком из БД.
+- Посмотреть информацию о заказе (включая доставку)
+```kotlin
+ override fun checkOrder(orderId: Int): List<ResultRow> {
         return transaction {
             Order.join(Delivery, joinType = JoinType.FULL).select { Order.orderId eq orderId }.map { it }
         }
     }
 
+    override fun checkOrder(orderId: Int): List<ResultRow>? {
+        if (cachingEnabled) {
+            val key = OrderKey(orderId)
+            if (Cache[key] != null) {
+                return Cache[key]
+            } else {
+                val result = UsualDatabaseConnector.checkOrder(orderId)
+                Cache[key] = result
+                return result
+            }
+        }
+        return UsualDatabaseConnector.checkOrder(orderId)
+    }
+```
+Тут похожая схема работы. Клиенту надо вывести и информацию о доставке, если она имеется. Если доставка не осуществляется, то в соответвующих полях программа выдаст NULL. Я решил это сделать при помощи `joinType = JoinType.FULL` для единообразия получаемых данных.
+
+С кэшированием всё +- также.
+- Посмотреть из чего состоит заказ
+```kotlin
+    override fun checkOrderPositions(orderId: Int): List<ResultRow> {
+        return transaction {
+            PizzaInOrder.select { PizzaInOrder.orderId eq orderId }.map { it }
+        }
+    }
+
+    override fun checkOrderPositions(orderId: Int): List<ResultRow>? {
+        if (cachingEnabled) {
+            val key = PositionsKey(orderId)
+            if (Cache[key] != null) {
+                return Cache[key]
+            } else {
+                val result = UsualDatabaseConnector.checkOrderPositions(orderId)
+                Cache[key] = result
+                return result
+            }
+        } else {
+            return UsualDatabaseConnector.checkOrderPositions(orderId)
+        }
+    }
+```
+Получаем список пицц по заказу при помощи ключа `orderId`. Схема кэширования та же.
+- Добавить пиццу к заказу
+```kotlin
     override fun addPizza(orderId: Int, pizzaId: Int, amount: Int) {
+
 
         val restaurantId = getRestaurantByOrder(orderId)
         val employee = getProbablyEmployees(restaurantId, Post.postCook eq true).random()
@@ -261,14 +371,40 @@ object UsualDatabaseConnector : DatabaseConnector() {
         }
     }
 
+    override fun addPizza(orderId: Int, pizzaId: Int, amount: Int) {
+        UsualDatabaseConnector.addPizza(orderId, pizzaId, amount)
+        if (cachingEnabled) {
+            Cache.remove(OrderKey(orderId))
+            Cache.remove(PositionsKey(orderId))
+        }
+    }
+```
+Добавляем пиццу к уже существующему заказу. При помощи методов из генератора определяем ресторан и сотрудника для пиццы и осущесвляем `INSERT` запрос.
+
+Если используем кэширование, то надо удалить из кэша: информацию о заказе (при добавлении пицы изменяется итоговая стоимость), информацию о содержании заказа (мы ведь добавили ещё 1 пиццу).
+- Изменить количество пицц в заказе
+```kotlin
     override fun changePizzaAmount(orderId: Int, pizzaId: Int, newAmount: Int) {
         transaction {
             PizzaInOrder.update({ (PizzaInOrder.orderId eq orderId) and (PizzaInOrder.pizzaId eq pizzaId) }) { row ->
-                row[PizzaInOrder.amount] = newAmount
+                row[amount] = newAmount
             }
         }
     }
 
+        override fun changePizzaAmount(orderId: Int, pizzaId: Int, newAmount: Int) {
+        UsualDatabaseConnector.changePizzaAmount(orderId, pizzaId, newAmount)
+        if (cachingEnabled) {
+            Cache.remove(OrderKey(orderId))
+            Cache.remove(PositionsKey(orderId))
+        }
+    }
+```
+Этот метод похож на плюс/минус и форму с числом на сайте с заказами. То есть по нажатию на них мы изменяем количество позиций в заказе. Делаем это при помощи оператора `UPDATE`.
+
+При кэшировании также надо чистить неактуальную информацию.
+- Изменить тип заказа (имеется ввиду доставка/самовывоз)
+```kotlin
     override fun changeType(orderId: Int, newType: ORDERTYPE) {
         val order = transaction {
             Order.select { Order.orderId eq orderId }.map { it }
@@ -300,258 +436,168 @@ object UsualDatabaseConnector : DatabaseConnector() {
 
         transaction {
             Order.update({ Order.orderId eq orderId }) { row ->
-                row[Order.orderType] = newType
+                row[orderType] = newType
             }
         }
 
     }
-
-    override fun changeRestaurant(orderId: Int, newRestaurantId: Int) {
-        val cooker = getProbablyEmployees(newRestaurantId, Op.build { Post.postCook eq true }).random()
-        val cashier = getProbablyEmployees(newRestaurantId, Op.build { Post.postCashbox eq true }).random()
-        val deliveryman = getProbablyEmployees(newRestaurantId, Op.build { Post.postDelivery eq true }).random()
-        transaction {
-            Order.update({ Order.orderId eq orderId }) { row ->
-                row[Order.restaurantId] = newRestaurantId
-                row[Order.employeeId] = cashier
-            }
-            PizzaInOrder.update({ PizzaInOrder.orderId eq orderId }) { row ->
-                row[PizzaInOrder.employeeId] = cooker
-            }
-            Delivery.update({ Delivery.orderId eq orderId }) { row ->
-                row[Delivery.employeeId] = deliveryman
-            }
-        }
-
-    }
-
-    override fun changeDeliveryAddress(orderId: Int, newAddress: String) {
-        transaction {
-            Delivery.update({ Delivery.orderId eq orderId }) { row ->
-                row[Delivery.deliveryAddress] = newAddress
-            }
-        }
-    }
-
-    override fun removePizza(orderId: Int, pizzaId: Int) {
-        transaction {
-            PizzaInOrder.deleteWhere { (PizzaInOrder.orderId eq orderId) and (PizzaInOrder.pizzaId eq pizzaId) }
-        }
-    }
-
-    private fun getRestaurantByOrder(orderId: Int): Int {
-        return transaction {
-            Order.select { Order.orderId eq orderId }.map { it }
-        }.first()[Order.restaurantId]
-    }
-
-}
-
-private fun getProbablyEmployees(restaurantId: Int, op: Op<Boolean>): List<Int> {
-    return transaction {
-        Employee.join(
-            Restaurant,
-            JoinType.INNER,
-            additionalConstraint = { Employee.restaurantId eq Restaurant.restaurantId })
-            .join(Post, JoinType.INNER, additionalConstraint = { Employee.postId eq Post.postId })
-            .slice(Employee.employeeId)
-            .select { Restaurant.restaurantId eq restaurantId }.andWhere { op }.map { it[Employee.employeeId] }
-    }
-
-}
-```
-
-В нём уже, как я говорил, есть все функции для работы с БД.
-
-Далее сделаем объект, для кэширования:
-
-```kotlin
-object CachingDataBaseConnector : DatabaseConnector() {
-
-    var cachingEnabled = true
-
-    object Cache : LRU<CacheKey, List<ResultRow>>(1000)
-
-    override fun checkMenu(): List<ResultRow>? {
-        if (cachingEnabled) {
-            val key = MenuKey
-            if (Cache[key] != null) {
-                return Cache[key]!!
-            } else {
-                val result = UsualDatabaseConnector.checkMenu()
-                if (result != null) {
-                    Cache[key] = result
-                }
-                return result
-            }
-        } else {
-            return UsualDatabaseConnector.checkMenu()
-        }
-    }
-
-    override fun checkOrderPositions(orderId: Int): List<ResultRow>? {
-        if (cachingEnabled) {
-            val key = PositionsKey(orderId)
-            if (Cache[key] != null) {
-                return Cache[key]
-            } else {
-                val result = UsualDatabaseConnector.checkOrderPositions(orderId)
-                if (result != null) {
-                    Cache[key] = result
-                }
-                return result
-            }
-        } else {
-            return UsualDatabaseConnector.checkOrderPositions(orderId)
-        }
-    }
-
-    override fun checkOrder(orderId: Int): List<ResultRow>? {
-        if (cachingEnabled) {
-            val key = OrderKey(orderId)
-            if (Cache[key] != null) {
-                return Cache[key]
-            } else {
-                val result = UsualDatabaseConnector.checkOrder(orderId)
-                if (result != null) {
-                    Cache[key] = result
-                }
-                return result
-            }
-        }
-        return UsualDatabaseConnector.checkOrder(orderId)
-
-    }
-
-    override fun addPizza(orderId: Int, pizzaId: Int, amount: Int) {
-        UsualDatabaseConnector.addPizza(orderId, pizzaId, amount)
-        if (cachingEnabled) {
-            Cache.remove(OrderKey(orderId))
-            Cache.remove(PositionsKey(orderId))
-        }
-    }
-
-    override fun changePizzaAmount(orderId: Int, pizzaId: Int, newAmount: Int) {
-        UsualDatabaseConnector.changePizzaAmount(orderId, pizzaId, newAmount)
-        if (cachingEnabled) {
-            Cache.remove(OrderKey(orderId))
-            Cache.remove(PositionsKey(orderId))
-        }
-    }
-
     override fun changeType(orderId: Int, newType: ORDERTYPE) {
         UsualDatabaseConnector.changeType(orderId, newType)
         if (cachingEnabled) {
             Cache.remove(OrderKey(orderId))
         }
     }
+```
+Тут мы меняем способ получения пиццы пользователем. Если была доставка, а стало что-то другое - удаляем запись из таблицы заказов. Если нужна доставка - генерируем новую запись в соответвующей таблице.
 
+Т.к. изменяется только информация о заказе, а не его содержимое, то можно удалять только запись о заказе в кэше.
+- Изменить ресторан доставки/самовывоза
+```kotlin
     override fun changeRestaurant(orderId: Int, newRestaurantId: Int) {
+        val cooker = getProbablyEmployees(newRestaurantId, Op.build { Post.postCook eq true }).random()
+        val cashier = getProbablyEmployees(newRestaurantId, Op.build { Post.postCashbox eq true }).random()
+        val deliveryman = getProbablyEmployees(newRestaurantId, Op.build { Post.postDelivery eq true }).random()
+        transaction {
+            Order.update({ Order.orderId eq orderId }) { row ->
+                row[restaurantId] = newRestaurantId
+                row[employeeId] = cashier
+            }
+            PizzaInOrder.update({ PizzaInOrder.orderId eq orderId }) { row ->
+                row[employeeId] = cooker
+            }
+            Delivery.update({ Delivery.orderId eq orderId }) { row ->
+                row[employeeId] = deliveryman
+            }
+        }
+
+    }
+
+        override fun changeRestaurant(orderId: Int, newRestaurantId: Int) {
         UsualDatabaseConnector.changeRestaurant(orderId, newRestaurantId)
         if (cachingEnabled) {
             Cache.remove(OrderKey(orderId))
         }
     }
-
+```
+Т.к. изменяется только информация о заказе, а не его содержимое, то можно удалять только запись о заказе в кэше.
+- Изменить адрес доставки - аналогично с пердыдущим пунктом:
+```kotlin
+    override fun changeDeliveryAddress(orderId: Int, newAddress: String) {
+        transaction {
+            Delivery.update({ Delivery.orderId eq orderId }) { row ->
+                row[deliveryAddress] = newAddress
+            }
+        }
+    }
     override fun changeDeliveryAddress(orderId: Int, newAddress: String) {
         UsualDatabaseConnector.changeDeliveryAddress(orderId, newAddress)
         if (cachingEnabled) {
             Cache.remove(OrderKey(orderId))
         }
     }
-
+```
+- Удалить пиццу из заказа
+```kotlin
     override fun removePizza(orderId: Int, pizzaId: Int) {
+        transaction {
+            PizzaInOrder.deleteWhere { (PizzaInOrder.orderId eq orderId) and (PizzaInOrder.pizzaId eq pizzaId) }
+        }
+    }
+        override fun removePizza(orderId: Int, pizzaId: Int) {
         UsualDatabaseConnector.removePizza(orderId, pizzaId)
         if (cachingEnabled) {
             Cache.remove(OrderKey(orderId))
             Cache.remove(PositionsKey(orderId))
         }
     }
-
-}
 ```
+Если можно добавить, нужно и удалить. Похожая картина с кэшем как у добавления пиццы.
 
-Тут всё просто, в методах, чья информация хранится в кэше пробуем взять её оттуда. В методах, где кэш изменяется, для когерентности удаляем неактуальные данные. Тут используем приём перехвата данных, как например это сделано между ОП и МП в некоторых архитектурах.
+Подводя итог этой части работы, можно сказать, что было создано довольно полное API для взаимодействия между пользовательской стороны (клиент делает заказ на сайте) и серверной стороной (данные заносятся и выдаются из БД).
 
-Как ключ, используем специальный класс, который хранит индекс к чему мы хотим обратиться.
-```kotlin
-abstract class CacheKey
+### **Проверка корректности**
 
-class OrderKey(val orderId : Int) : CacheKey() {
+Попробуем поработать с нашим API, и посмотреть на результат. Будем мучать один заказ.
 
-    override fun hashCode(): Int {
-        return orderId.hashCode()
-    }
-
-    override fun equals(other: Any?): Boolean {
-        if (this === other) return true
-        if (javaClass != other?.javaClass) return false
-
-        other as OrderKey
-
-        if (orderId != other.orderId) return false
-
-        return true
-    }
-}
-
-object MenuKey : CacheKey(){
-
-    override fun equals(other: Any?): Boolean {
-        if (this === other) return true
-        if (javaClass != other?.javaClass) return false
-        return true
-    }
-}
-
-class PositionsKey(val orderId: Int) : CacheKey() {
-    override fun hashCode(): Int {
-        return orderId.hashCode()
-    }
-
-    override fun equals(other: Any?): Boolean {
-        if (this === other) return true
-        if (javaClass != other?.javaClass) return false
-
-        other as PositionsKey
-
-        if (orderId != other.orderId) return false
-
-        return true
-    }
-
-}
-```
-
-Теперь, когда мы имеем весь АПИ, можно приступать к созданию бенчмарка. Первое — это потоки. Для простоты было решено наследоваться от `Thread` и изменять метод `run()`. Так, например, поток для выборки заказа выглядит так:
-```kotlin
-class ViewOrdersThread(iterations: Int) : CountingThread(iterations) {
-
-    override fun run() {
-        DatabaseFactory.connect()
-        CYCLICBARRIER.await()
-        val cartOrders = transaction {
-            Order.select { Order.orderStatus eq ORDERSTATUS.Cart }.map { it[Order.orderId] }
-        }
-        while (CYCLICBARRIER.numberWaiting < 6) {
-            val start = System.nanoTime()
-            CachingDataBaseConnector.checkOrder(cartOrders.random())
-            time.add(System.nanoTime() - start)
-        }
-        println("3 ended")
-        CYCLICBARRIER.await()
-    }
-}
-```
-
-Все потоки имеют параметр iterations, для удобной параметризации. Также было решено, что потоки выборки будут работать пока не закончат работать другие потоки, поэтому имеет условие по `CyclicBarrier`. Думаю, не очень интересно разжёвывать каждую строчку, поэтому перейдём к главному классу(ну или методу, компилируется всё равно в класс).
+Со сравнением через `equals` возникли проблемы, поэтому данные выводятся на консоль...
 
 ```kotlin
 fun main() {
+    DatabaseFactory.connect()
+    val restaurants = transaction {
+        Restaurant.selectAll().map { it[Restaurant.restaurantId] }
+    }
+    val pizzas = transaction {
+        Pizza.selectAll().map { it[Pizza.pizzaId] }
+    }.iterator()
+    val restaurantId = restaurants.random()
+    val order = transaction {
+        Order.insert { row ->
+            row[Order.restaurantId] = restaurantId
+            row[Order.employeeId] = getProbablyEmployees(restaurantId, Op.build { Post.postCashbox eq true }).random()
+            row[Order.orderDate] = Instant.now()
+            row[Order.orderType] = ORDERTYPE.Restaurant
+            row[Order.orderStatus] = ORDERSTATUS.Cart
+        }.resultedValues
+    }
+    val orderId = order!![0][Order.orderId]
+    println("Created order with ID: $orderId")
+    // Добавим пиццу, после посмотрим на 2 запроса...
+    CachingDataBaseConnector.addPizza(orderId, pizzas.next(), (1..5).random())
+    // Обращаемся к коннектору и смотрим что запишется в кэш
+    CachingDataBaseConnector.checkOrder(orderId)
+    CachingDataBaseConnector.checkOrderPositions(orderId)
+    println("Cache state:")
+    println(CachingDataBaseConnector.Cache.getInfo())
+    // Добавим пиццу, данные из кэша должны удалиться...
+    CachingDataBaseConnector.addPizza(orderId, pizzas.next(), (1..5).random())
+    println("Cache state:")
+    println(CachingDataBaseConnector.Cache.getInfo())
+    // Вернём данные в кэш
+    CachingDataBaseConnector.checkOrder(orderId)
+    CachingDataBaseConnector.checkOrderPositions(orderId)
+    println("Cache state:")
+    println(CachingDataBaseConnector.Cache.getInfo())
+    // Видим, что ещё одна пицца добавилась
+    // Теперь будем проводить операции с пиццами и сравнивать результаты
+    CachingDataBaseConnector.changePizzaAmount(
+        orderId,
+        transaction {
+            PizzaInOrder.select { PizzaInOrder.orderId eq orderId }.map { it[PizzaInOrder.pizzaId] }
+        }.first(),
+        (1..10).random()
+    )
+    // Проверим, что кэш не отдаёт старые данные
+    println("Data from cache:")
+    println(CachingDataBaseConnector.checkOrder(orderId))
+    println(CachingDataBaseConnector.checkOrderPositions(orderId))
+    println("Data from database:")
+    println(UsualDatabaseConnector.checkOrder(orderId))
+    println(UsualDatabaseConnector.checkOrderPositions(orderId))
+    // Удалим заказ...
 
-    CachingDataBaseConnector.cachingEnabled = false
+    // Some code...
 
-     val iterations = 1000
+    transaction {
+        Order.deleteWhere { Order.orderId eq orderId }
+    }
+}
+```
+
+После проверки всех функций, можно сделать вывод, что когерентность не нарушена, и мы действительно получаем актуальную информацию.
+
+Таким образом был написан объект, при помощи которого можно связываться с БД, а результаты функций с `SELECT` кэшируется в памяти программе и не поддвержены проблемам когерентности.
+
+
+## Тестирование решения
+
+Программа для тестирования нашего кэша предоставлена в пакете `com.wooftown.caching.test`. 
+```kotlin
+fun main() {
+
+    CachingDataBaseConnector.cachingEnabled = true
+
+    val iterations = 1000
 
     val threadsMap = mutableMapOf(
         "Check_Menu" to ViewMenuThread(iterations),
@@ -571,6 +617,10 @@ fun main() {
 
     println(CachingDataBaseConnector.Cache.getInfo())
 
+    for ((key, value) in threadsMap) {
+        println("$key - ${value.time.sum() / value.iterations}")
+    }
+
     val directory = "results/" + if (CachingDataBaseConnector.cachingEnabled) "cache/" else "default/"
     for ((key, value) in threadsMap) {
         val filename = directory + "$key${value.iterations}"
@@ -583,55 +633,119 @@ fun main() {
         }
     }
 
+
+}
+```
+В ней мы создаём потоки, которые будут работать с БД, запускаем их, ожидаем выполнения, а после записываем информацию в бинарные файлы, для будущей работы с ними.
+
+Сами потоки синхронизированны между собой в момент запуска при помощи `val CYCLICBARRIER = CyclicBarrier(9)`. Это связано с тем, что подключение к БД довольно долгий процесс, а хотелось бы чтобы потоки начинали работу вместе (хоть они у меня и асинхронные).
+
+Потоки с выборками запускаются бесконечное количество раз, пока не отработают другие потоки.
+
+
+Сами файлы будем обрабатывать как в `Lab04_2021`, поэтому код и пояснения можно посмотреть там. Результаты при 1000 итераций для каждого потока, анализируем их уже в выводе. Вот пример потока просмотра содержимого заказа: 
+
+```kotlin
+open class CountingThread(val iterations: Int) : Thread() {
+
+    val time = mutableListOf<Long>()
+}
+
+class ViewPositionsThread(iterations: Int) : CountingThread(iterations) {
+
+
+    override fun run() {
+        DatabaseFactory.connect()
+        CYCLICBARRIER.await()
+        val cartOrders = transaction {
+            Order.select { Order.orderStatus eq ORDERSTATUS.Cart }.map { it[Order.orderId] }
+        }
+
+        while (CYCLICBARRIER.numberWaiting < 6) {
+            val start = System.nanoTime()
+            CachingDataBaseConnector.checkOrderPositions(cartOrders.random())
+            time.add(System.nanoTime() - start)
+        }
+
+        println("2 ended")
+        CYCLICBARRIER.await()
+    }
+}
+```
+Время для каждой операции записывается в список, который потом конвертируется в бинарный файл для работы с ним. Тут стоит условие для `CYCLICBARRIER`, число 6 - количество остальных потоков, которые выполняют команды `UPDATE`, `INSERT`, `DELETE`. Вот пример такого потока:
+
+```kotlin
+class AddPizzaThread(iterations: Int) : CountingThread(iterations) {
+    override fun run() {
+        DatabaseFactory.connect()
+        CYCLICBARRIER.await()
+        val cartOrders = transaction {
+            Order.select { Order.orderStatus eq ORDERSTATUS.Cart }.map { it[Order.orderId] }
+        }
+        val pizzaMenus = transaction {
+            Pizza.selectAll().map { it[Pizza.pizzaId] }
+        }.toSet()
+
+        for (i in 0..iterations) {
+            val order = cartOrders.random()
+            val pizzaInOrder = transaction {
+                PizzaInOrder.select { PizzaInOrder.orderId eq order }.map { it[PizzaInOrder.pizzaId] }
+            }.toSet()
+            val newPizza = (pizzaMenus - pizzaInOrder).random()
+            val start = System.nanoTime()
+            CachingDataBaseConnector.addPizza(order, newPizza, (1..5).random())
+            time.add(System.nanoTime() - start)
+
+        }
+        println("4 ended")
+        CYCLICBARRIER.await()
+    }
 }
 ```
 
-Определяем 9 потоков и запускаем их, не забывая про `join`, чтобы главный поток программы не закончил выполнения раньше срока. После того как потоки отработали, выводится содержимое кэша (для интереса) и происходит запись в файлы. 
+Теперь можно запустить главную функцию и провести тестирование. Я решил взять 1000 итераций и размер кэша - 100 элементов.
 
-
-Сами файлы будем обрабатывать как в `Lab04_2021`, поэтому код и пояснения можно посмотреть там. Результаты при 1000 итераций для каждого потока, анализируем их уже в выводе.
+Далее воспользуемся классами из `lab4_2021` и выводим статистику:
 
 ```
-===================================/cache      ===================================
-OPERATION                          |AVERAGE            |SD                  |MEDIAN     
-Check_Menu1000                     |0,007 ±0,000        |0,625               |0,006               
-Check_Order1000                    |0,006 ±0,000        |0,062               |0,005               
-Check_Positions1000                |0,006 ±0,000        |0,061               |0,005        
-
-Add_Pizza1000                      |2,462 ±0,004        |2,220               |2,149               
-Change_Amount1000                  |0,595 ±0,001        |0,715               |0,489               
-Change_Delivery_Address1000        |12,684 ±0,036       |17,966              |9,757               
-Change_Order_Type1000              |5,594 ±0,038        |19,010              |1,165               
-Change_Restaurant1000              |3,313 ±0,005        |2,620               |2,910                      
-Remove_Pizza1000                   |1,725 ±0,004        |2,006               |1,486               
-===================================/cache      ===================================
-===================================/default    ===================================
-OPERATION                          |AVERAGE            |SD                  |MEDIAN              
-Check_Menu1000                     |0,483 ±0,002        |5,065               |0,399               
-Check_Order1000                    |0,240 ±0,000        |0,195               |0,211               
-Check_Positions1000                |0,450 ±0,000        |0,239               |0,398 
-
-Add_Pizza1000                      |4,180 ±0,074        |37,100              |2,295               
-Change_Amount1000                  |0,607 ±0,002        |0,892               |0,455               
-Change_Delivery_Address1000        |12,742 ±0,034       |17,215              |10,163              
-Change_Order_Type1000              |6,186 ±0,043        |21,815              |1,219               
-Change_Restaurant1000              |5,319 ±0,090        |45,347              |2,952                             
-Remove_Pizza1000                   |3,698 ±0,090        |45,561              |1,539               
-===================================/default    ===================================
+======================================================== [/cache] ======================================================== 
+Operation                     |	Average time [ms]   |	SD [ms]     |	Median [ms] |	Min [ns]       |	Max [ns]       |
+Add_Pizza1000                 |	2,449±0,003         |	1,375       |	2,242       |	1346200,000    |	32097800,000   |
+Change_Amount1000             |	0,672±0,001         |	0,697       |	0,531       |	260200,000     |	10057200,000   |
+Change_Delivery_Address1000   |	12,926±0,030        |	15,280      |	10,045      |	8855700,000    |	434229700,000  |
+Change_Order_Type1000         |	5,616±0,031         |	15,784      |	1,134       |	162800,000     |	398148900,000  |
+Change_Restaurant1000         |	3,336±0,003         |	1,738       |	3,028       |	1746400,000    |	40476200,000   |
+Check_Menu1000                |	0,007±0,000         |	0,671       |	0,006       |	100,000        |	973588100,000  |
+Check_Order1000               |	0,007±0,000         |	0,070       |	0,005       |	100,000        |	29696200,000   |
+Check_Positions1000           |	0,007±0,000         |	0,076       |	0,005       |	100,000        |	39512800,000   |
+Remove_Pizza1000              |	1,642±0,002         |	0,915       |	1,515       |	653100,000     |	13801600,000   |
+======================================================== [/default] ======================================================== 
+Operation                     |	Average time [ms]   |	SD [ms]     |	Median [ms] |	Min [ns]       |	Max [ns]       |
+Add_Pizza1000                 |	3,332±0,032         |	16,090      |	2,413       |	1273400,000    |	502662700,000  |
+Change_Amount1000             |	0,608±0,001         |	0,535       |	0,512       |	270500,000     |	9887500,000    |
+Change_Delivery_Address1000   |	13,461±0,035        |	17,499      |	10,637      |	8656200,000    |	488646500,000  |
+Change_Order_Type1000         |	7,116±0,065         |	32,998      |	1,370       |	187200,000     |	831616400,000  |
+Change_Restaurant1000         |	6,867±0,110         |	55,566      |	3,451       |	1704600,000    |	1029903400,000 |
+Check_Menu1000                |	0,510±0,002         |	5,397       |	0,413       |	296200,000     |	933681300,000  |
+Check_Order1000               |	0,256±0,000         |	0,161       |	0,220       |	146500,000     |	6942500,000    |
+Check_Positions1000           |	0,497±0,000         |	0,275       |	0,425       |	309900,000     |	21864800,000   |
+Remove_Pizza1000              |	4,896±0,111         |	55,791      |	1,636       |	768300,000     |	1035143800,000 |
 
 Process finished with exit code 0
 ```
 
+!["D"](content/result.png)
+
 ## Выводы
 
-В ходе данной лабораторной работы был спроектирован LRU-кэш для ускорения выполнения запросов из нашей БД. Я решил использоваться метод хранения данных в программе, потому что у меня не так много данных в таблицах и прирост был бы заметен только при таком способе. 
+Сначала обратим внимание на результаты:
 
-Что касается LRU - классический алгоритм, который показал на практике свою работоспособность. Как говорили на занятиях по ЭВМ: это не самый лучший алгоритм, но лучше остальных.
+- Видим, что операции `Check`(их результат кэшировался) выполнсяются на порядок быстрее с реализацией кэша. Если посмотреть на минимальное время, то увидим 100 наносекунд как минимальное. Наверное это связано с точностью работы `System.getTimeInNanos()`. Смотря на максимальное время можно сделать вывод, что оно сопоставимо с реализацией без кэша. Так и должно быть, т.к. если у нас нет данных в кэше, то надо обращаться к БД.
 
-Пул соединений Hikari позволил упростить процесс подключения к БД. Для каждого потока - своё подключение.
+- Среднее время почти у всех оперций с кэшем оказались меньше. Но это никак не связано с кэшированием (в теории должно быть даже наоборот, т.к. у нас идёт оверхед из-за операций с LRU). Это можно с чистой совестью свалить на погрешности наших экспериментов. 
 
-Результаты: я считаю, что результаты можно назвать успешными, т.к. время выполнения запросов отличается на 2 порядка. Конечно остальные запросы я вывел просто так, для наглядности их значения постоянно меняются из-за невозможности проведения теста в ваакуме, но отличие на порядок, действительно вселяет оптимизм насчёт этой программы.
+- Проведение эксперимента в ваакуме это далёкая мечта. Поэтому после каждого запуска мы  получаем чуть разные результаты, но разница на порядок всегда сохраняется (надо было делать сервером линуксе :) ). Поэтому можно сделать вывод, что кэширование действительно позволило увеличить скорость получения результата избегая обращений к БД. 
 
-Я считаю что можно ещё сильней повысить быстродействие, но тогда надо  бесконечно играться с количеством итераций, размером БД, размером кэша. Ведь сама концепция кэша - компромисс между большой и медленной памятью (Postgre в нашем случае) и быстрой но маленькой (JVM).
+В ходе лаборотной работе был описан алгоритм LRU с поддержкой многопоточности. Тестовые потоки работали ассинхронно. Также была решена проблема когерентности кэша. Использовался один из способов такого контроля - перехват. Так например специальные контроллеры перехватыют информацию и шин адреса/данных и помечают данные в кэше как неактуальные.
 
-Также может показаться, что добавления меню в кэш это какой-то бред. Я согласен с этим, на практике я думаю, в кэше бы хранились слайсы от меню. Но я решил попробовать это и посмотреть за быстродействием.
+Главное в кэшировании - нахождения оптимальной величины кэша. Ведь сама концепция - компромисс между быстрой и маленькой памятью (JVM) и большой но медленной (БД). Поэтому можно бесконечно искать нужную конфигурацию этих составляющих, но думаю в рамках данной ЛР был продемонстирован хороший пример организации кэша для повышения быстродействия выполнения запросов от клиентской стороны (онлайн заказы пиццы).

@@ -5,7 +5,6 @@ import org.apache.commons.math3.stat.descriptive.DescriptiveStatistics
 
 class ExperimentData(private val data: List<Long>, val name: String) {
 
-    fun getDataInMillis(): List<Double> = data.map { it / 1_000_000.0 }
 
     private val statistics = DescriptiveStatistics();
 
@@ -13,6 +12,8 @@ class ExperimentData(private val data: List<Long>, val name: String) {
     val SD: Double
     val median: Double
     val confidence: Double
+    val min: Double
+    val max: Double
 
     init {
         data.forEach { statistics.addValue(it.toDouble()) }
@@ -20,6 +21,8 @@ class ExperimentData(private val data: List<Long>, val name: String) {
         this.SD = statistics.standardDeviation
         this.median = statistics.getPercentile(50.0)
         this.confidence = getConfidenceIntervalWidth()
+        this.min = statistics.min
+        this.max = statistics.max
     }
 
     private fun getConfidenceIntervalWidth(): Double {

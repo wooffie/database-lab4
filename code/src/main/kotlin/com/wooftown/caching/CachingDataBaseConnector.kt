@@ -1,13 +1,17 @@
 package com.wooftown.caching
 
-import com.wooftown.database.tables.ORDERTYPE
-import org.jetbrains.exposed.sql.ResultRow
+import com.wooftown.database.DatabaseFactory
+import com.wooftown.database.tables.*
+import com.wooftown.utils.getProbablyEmployees
+import org.jetbrains.exposed.sql.*
+import org.jetbrains.exposed.sql.transactions.transaction
+import java.time.Instant
 
 object CachingDataBaseConnector : DatabaseConnector() {
 
     var cachingEnabled = true
 
-    object Cache : LRU<CacheKey, List<ResultRow>>(1000)
+    object Cache : LRU<CacheKey, List<ResultRow>>(100)
 
     override fun checkMenu(): List<ResultRow>? {
         if (cachingEnabled) {
@@ -101,3 +105,4 @@ object CachingDataBaseConnector : DatabaseConnector() {
     }
 
 }
+

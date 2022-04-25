@@ -6,7 +6,6 @@ import java.io.ObjectInputStream
 
 
 fun main() {
-
     for (i in listOf("/cache", "/default")) {
         val filedir = File("results" + i)
         val dataFiles = filedir.listFiles()
@@ -31,19 +30,30 @@ fun main() {
 
 }
 
-fun makeTable(experimentDataList: List<ExperimentData>, transactionLevel: String?) {
-    System.out.format("%-35s%-12s%-35s\n", "=".repeat(35), transactionLevel, "=".repeat(35))
-    System.out.format("%-35s|%-19s|%-20s|%-20s\n", "OPERATION", "AVERAGE", "SD", "MEDIAN")
-    for (experimentData in experimentDataList) {
-        val operation = experimentData.name
-        val average = java.lang.String.format(
-            "%.3f ±%.3f",
-            experimentData.mean / 1000000.0,
-            experimentData.confidence / 1000000.0
+fun makeTable(experimentDataList: List<ExperimentData>, type: String?) {
+    println("${"=".repeat(56)} [$type] ${"=".repeat(56)} ")
+    val format = "%-30s|\t%-20s|\t%-12s|\t%-12s|\t%-15s|\t%-15s|"
+    val numberFormat = "%.3f"
+    println(format.format("Operation", "Average time [ms]", "SD [ms]", "Median [ms]", "Min [ns]", "Max [ns]"))
+
+    for (experimentData in experimentDataList.sortedBy { it.name }) {
+        val op = experimentData.name
+        val meanInMillis = experimentData.mean / 1_000_000
+        val standardDeviationInMillis = experimentData.SD / 1_000_000
+        val medianInMillis = experimentData.median / 1_000_000
+        val confidenceInMillis = experimentData.confidence / 1_000_000
+        val minInNanos = experimentData.min
+        val maxInNanos = experimentData.max
+        println(
+            format.format(
+                op,
+                "%s±%s".format(numberFormat.format(meanInMillis), numberFormat.format(confidenceInMillis)),
+                numberFormat.format(standardDeviationInMillis),
+                numberFormat.format(medianInMillis),
+                numberFormat.format(minInNanos),
+                numberFormat.format(maxInNanos)
+            )
         )
-        val deviation = java.lang.String.format("%.3f", experimentData.SD / 1000000.0)
-        val median = java.lang.String.format("%.3f", experimentData.median / 1000000.0)
-        System.out.format("%-35s|%-20s|%-20s|%-20s\n", operation, average, deviation, median)
     }
-    System.out.format("%-35s%-12s%-35s\n", "=".repeat(35), transactionLevel, "=".repeat(35))
+
 }

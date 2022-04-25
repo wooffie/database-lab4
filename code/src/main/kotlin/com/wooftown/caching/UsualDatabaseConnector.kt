@@ -1,8 +1,9 @@
 package com.wooftown.caching
 
 import com.github.javafaker.Faker
-import com.wooftown.database.DatabaseFactory
 import com.wooftown.database.tables.*
+import com.wooftown.utils.getProbablyEmployees
+import com.wooftown.utils.getRestaurantByOrder
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -122,47 +123,4 @@ object UsualDatabaseConnector : DatabaseConnector() {
     }
 
 
-    private fun getRestaurantByOrder(orderId: Int): Int {
-        return transaction {
-            Order.select { Order.orderId eq orderId }.map { it }
-        }.first()[Order.restaurantId]
-    }
-
-
-}
-
-private fun getProbablyEmployees(restaurantId: Int, op: Op<Boolean>): List<Int> {
-    return transaction {
-        Employee.join(
-            Restaurant,
-            JoinType.INNER,
-            additionalConstraint = { Employee.restaurantId eq Restaurant.restaurantId })
-            .join(Post, JoinType.INNER, additionalConstraint = { Employee.postId eq Post.postId })
-            .slice(Employee.employeeId)
-            .select { Restaurant.restaurantId eq restaurantId }.andWhere { op }.map { it[Employee.employeeId] }
-    }
-
-}
-
-
-fun main() {
-    DatabaseFactory.connect()
-    //println(UsualDatabaseConnector.checkMenu())
-    println(UsualDatabaseConnector.checkOrderPositions(7019))
-    println(UsualDatabaseConnector.checkOrder(7019))
-    transaction {
-        PizzaInOrder.deleteWhere { (PizzaInOrder.pizzaId eq 515) and (PizzaInOrder.orderId eq 7019) }
-    }
-    UsualDatabaseConnector.addPizza(7019, 515, 3)
-    println(UsualDatabaseConnector.checkOrderPositions(7019))
-    println(UsualDatabaseConnector.checkOrder(7019))
-    UsualDatabaseConnector.changePizzaAmount(7019, 515, 4)
-    println(UsualDatabaseConnector.checkOrderPositions(7019))
-    println(UsualDatabaseConnector.checkOrder(7019))
-    UsualDatabaseConnector.changeType(7019, ORDERTYPE.Delivery)
-    println(UsualDatabaseConnector.checkOrderPositions(7019))
-    println(UsualDatabaseConnector.checkOrder(7019))
-    UsualDatabaseConnector.changeType(7019, ORDERTYPE.Pickup)
-    println(UsualDatabaseConnector.checkOrderPositions(7019))
-    println(UsualDatabaseConnector.checkOrder(7019))
 }

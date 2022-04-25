@@ -24,6 +24,24 @@ fun existInTable(table: Table, op: Op<Boolean>): Boolean = transaction {
     return@transaction result[existsOp]
 }
 
+fun getRestaurantByOrder(orderId: Int): Int {
+    return transaction {
+        Order.select { Order.orderId eq orderId }.map { it }
+    }.first()[Order.restaurantId]
+}
+
+
+fun getProbablyEmployees(restaurantId: Int, op: Op<Boolean>): List<Int> {
+    return transaction {
+        Employee.join(
+            Restaurant,
+            JoinType.INNER,
+            additionalConstraint = { Employee.restaurantId eq Restaurant.restaurantId })
+            .join(Post, JoinType.INNER, additionalConstraint = { Employee.postId eq Post.postId })
+            .slice(Employee.employeeId)
+            .select { Restaurant.restaurantId eq restaurantId }.andWhere { op }.map { it[Employee.employeeId] }
+    }
+}
 
 fun clearAll() {
     transaction {

@@ -1,13 +1,13 @@
 package com.wooftown.generators
 
 object GenerationConfig {
-    const val ingredientsNumber = 200
+    const val ingredientsNumber = 5
     const val ingredientSourceFile = "/data/ingredients.txt"
     const val sizeSourceFile = "data/sizes.csv"
-    const val pizzasNumber = 50
+    const val pizzasNumber = 5
     const val postSourceFile = "data/posts.csv"
-    const val restaurantsNumber = 15
-    const val employeeNumber = 300
-    const val ordersNumber = 1_000
-    const val reviewNumber = 1_00
+    const val restaurantsNumber = 2
+    const val employeeNumber = 6
+    const val ordersNumber = 10
+    const val reviewNumber = 0
 }
